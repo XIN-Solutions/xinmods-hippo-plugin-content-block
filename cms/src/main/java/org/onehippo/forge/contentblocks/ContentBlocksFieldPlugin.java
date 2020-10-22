@@ -414,6 +414,7 @@ public class ContentBlocksFieldPlugin extends AbstractFieldPlugin<Node, JcrNodeM
         collapsedItems.set(item.getIndex(), this.startCollapsed);
 
         final boolean isCollapsed = collapsedItems.get(item.getIndex());
+
         item.add(
             new ContentBlocksEditableFieldContainer(FIELD_CONTAINER_ID, item, model, this, getBlockHeading(model), isCollapsed) {
                 @Override
@@ -437,7 +438,7 @@ public class ContentBlocksFieldPlugin extends AbstractFieldPlugin<Node, JcrNodeM
         String blockTitle = getBlockTitle(model);
         String blockName = getBlockName(model);
         return (
-            StringUtils.isEmpty(blockTitle)
+            StringUtils.isEmpty(blockTitle) || !showTitles
                 ? blockName
                 : String.format("%s - %s", blockName, blockTitle)
         );
