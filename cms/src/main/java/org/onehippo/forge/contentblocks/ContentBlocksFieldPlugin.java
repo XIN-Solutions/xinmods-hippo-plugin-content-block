@@ -15,16 +15,15 @@
  */
 package org.onehippo.forge.contentblocks;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import javax.jcr.Node;
+import javax.jcr.Property;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.wicket.Component;
 import org.apache.wicket.MarkupContainer;
@@ -88,6 +87,7 @@ import org.onehippo.forge.contentblocks.sort.SortHelper;
 import org.onehippo.forge.contentblocks.validator.ContentBlocksValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.util.CollectionUtils;
 
 /**
  * ContentBlocksFieldPlugin provides authors with the ability to add different "content blocks" to a document with the
@@ -109,12 +109,18 @@ public class ContentBlocksFieldPlugin extends AbstractFieldPlugin<Node, JcrNodeM
     private static final String PROVIDER_COMPOUND = "cpItemsPath";
     private static final String COMPOUND_LIST = "compoundList";
     private static final String SHOW_COMPOUND_NAMES = "showCompoundNames";
+    private static final String SHOW_TITLES = "showTitles";
+    private static final String TITLE_MAPPING = "titleMapping";
+    private static final String START_COLLAPSED = "startCollapsed";
     private static final String FIELD_CONTAINER_ID = "fieldContainer";
     private static final String CONTENTPICKER_ADD = "contentpicker-add";
 
     private final List<String> compoundList;
     private final String providerCompoundType;
     private final boolean showCompoundNames;
+    private final boolean startCollapsed;
+    private final boolean showTitles;
+    private final Map<String, String> titleMappings = new HashMap<>();
     private final int maxItems;
     private final FlagList collapsedItems = new FlagList();
 
@@ -139,6 +145,10 @@ public class ContentBlocksFieldPlugin extends AbstractFieldPlugin<Node, JcrNodeM
         final IPluginConfig parameters = new JavaPluginConfig(config.getPluginConfig(CLUSTER_OPTIONS));
         maxItems = parameters.getInt(MAX_ITEMS, MAX_ITEMS_UNLIMITED);
         showCompoundNames = parameters.getAsBoolean(SHOW_COMPOUND_NAMES, false);
+        startCollapsed = parameters.getAsBoolean(START_COLLAPSED, false);
+        showTitles = parameters.getAsBoolean(SHOW_TITLES, false);
+
+        initialiseTitleMappings(parameters.getStringArray(TITLE_MAPPING));
 
         final IModel<String> caption = helper.getCaptionModel(this);
         final IModel<String> hint = helper.getHintModel(this);
@@ -148,6 +158,37 @@ public class ContentBlocksFieldPlugin extends AbstractFieldPlugin<Node, JcrNodeM
         final Component controls = createControls();
         controls.setVisible(isEditMode());
         add(controls);
+    }
+
+    /**
+     * Initialise the tile mappings
+     *
+     * @param titleMapping  a list of tilemappings in the shape of (type=>field)
+     */
+    private void initialiseTitleMappings(String[] titleMapping) {
+
+        // no title mapping? return
+        if (ArrayUtils.isEmpty(titleMapping)) {
+            log.info("No title mapping.");
+            return;
+        }
+
+        for (String mapping: titleMapping) {
+            int eqIdx = mapping.indexOf("=");
+            if (eqIdx == -1) {
+                log.debug("Title mapping does not have '=', skipping: {}", mapping);
+                continue;
+            }
+
+            String typeName = mapping.substring(0, eqIdx);
+            String property = mapping.substring(eqIdx + 1);
+            if (StringUtils.isBlank(typeName) || StringUtils.isBlank(property)) {
+                log.debug("Typename or Property empty, skipping: {}", mapping);
+                continue;
+            }
+
+            this.titleMappings.put(typeName, property);
+        }
     }
 
     private Component createControls() {
@@ -369,19 +410,66 @@ public class ContentBlocksFieldPlugin extends AbstractFieldPlugin<Node, JcrNodeM
 
     @Override
     protected void populateEditItem(final Item<IRenderService> item, final JcrNodeModel model) {
+
+        collapsedItems.set(item.getIndex(), this.startCollapsed);
+
         final boolean isCollapsed = collapsedItems.get(item.getIndex());
-        item.add(new ContentBlocksEditableFieldContainer(FIELD_CONTAINER_ID,
-                item, model, this, getBlockName(model), isCollapsed) {
-            @Override
-            protected void onCollapse(final boolean collapsed) {
-                collapsedItems.set(item.getIndex(), collapsed);
+        item.add(
+            new ContentBlocksEditableFieldContainer(FIELD_CONTAINER_ID, item, model, this, getBlockHeading(model), isCollapsed) {
+                @Override
+                protected void onCollapse(final boolean collapsed) {
+                    collapsedItems.set(item.getIndex(), collapsed);
+                }
             }
-        });
+        );
     }
 
     @Override
     protected void populateViewItem(final Item<IRenderService> item, final JcrNodeModel model) {
-        item.add(new ContentBlocksFieldContainer(FIELD_CONTAINER_ID, item, getBlockName(model), false));
+        item.add(new ContentBlocksFieldContainer(FIELD_CONTAINER_ID, item, getBlockHeading(model),  this.startCollapsed));
+    }
+
+
+    /**
+     * @return the block heading
+     */
+    private String getBlockHeading(JcrNodeModel model) {
+        String blockTitle = getBlockTitle(model);
+        String blockName = getBlockName(model);
+        return (
+            StringUtils.isEmpty(blockTitle)
+                ? blockName
+                : String.format("%s - %s", blockName, blockTitle)
+        );
+    }
+
+    /**
+     * @return the block title
+     */
+    protected String getBlockTitle(JcrNodeModel model) {
+        try {
+            Node node = model.getNode();
+            String modelName = node.getPrimaryNodeType().getName();
+            String prop = this.titleMappings.get(modelName);
+            if (StringUtils.isEmpty(prop)) {
+                return null;
+            }
+
+            if (!node.hasProperty(prop)) {
+                return null;
+            }
+
+            Property propInstance = node.getProperty(prop);
+            String propValue = propInstance.getString();
+            if (StringUtils.isBlank(propValue)) {
+                return null;
+            }
+            return propValue;
+        }
+        catch (Exception ex) {
+            log.error("Couldn't get primary node type for item, skipping value population");
+        }
+        return null;
     }
 
     @Override
