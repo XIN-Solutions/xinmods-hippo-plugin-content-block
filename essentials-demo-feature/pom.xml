@@ -20,12 +20,12 @@
 
   <parent>
     <groupId>org.onehippo.cms7</groupId>
-    <artifactId>hippo-plugin-content-blocks-root</artifactId>
+    <artifactId>xinmods-plugin-content-blocks-root</artifactId>
     <version>14.2.1</version>
   </parent>
 
   <name>Hippo Plugin Content Blocks Essentials Demo Feature</name>
   <description>Hippo Plugin Content Blocks Essentials Demo Feature</description>
-  <artifactId>hippo-plugin-content-blocks-essentials-demo-feature</artifactId>
+  <artifactId>xinmods-plugin-content-blocks-essentials-demo-feature</artifactId>
 
 </project>
