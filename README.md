@@ -5,6 +5,11 @@ plugin in your Hippo project can be found at:
 
 http://www.onehippo.org/library/concepts/plugins/content-blocks/about.html
 
+This is a fork of the original project, that adds:
+
+* better titles to content block elements
+* collapses content blocks by default for easier navigation
+
 ## Build and Run the Demo Project
 
 1. Create a demo project from the archetype as described at https://www.onehippo.org/trails/getting-started/hippo-essentials-getting-started.html
